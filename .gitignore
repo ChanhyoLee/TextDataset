@@ -1,0 +1,11 @@
+*.ftpconfig
+*.ftpignore
+*.o
+*.gch
+*.backup
+main
+CommentAboutDocumentation
+tutorials/CIFAR10/cifar-10-batches-bin/
+tutorials/LFW/data/
+*.backup
+NoPublic/
