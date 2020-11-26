@@ -1,4 +1,6 @@
 //#pragma once
+#ifndef __TEXTDATASET__HPP
+#define __TEXTDATASET__HPP    value
 
 #include <iostream>
 #include <fstream>
@@ -18,7 +20,7 @@
 template<typename DTYPE> class TextDataset : public Dataset<DTYPE>{ //전처리 옵션 관리하고
 private:
   string path;
-  char* TextData;
+  char* m_pTextData;
   int text_length;
   int line_length;
   //-----Field 클래스에서 차용------//
@@ -35,21 +37,21 @@ private:
   map<string, int>* m_pVocab2Frequency;
   map<string, int>* m_pVocab2Index;
   int n_vocabs;
-  // //-----넘겨주는 Data 관련!------//
-  // DTYPE **m_aaInput;
-  // DTYPE **m_aaLabel;
-  //
-  // int m_numOfInput;             //input data의 개수!!!
-  // int m_window;                 //window size -> 홀수가 기본이겠지!
-  // int m_negative;
-  //
-  // int m_dimOfInput;
-  // int m_dimOfLabel;
+  //-----넘겨주는 Data 관련!------//
+  DTYPE **m_aaInput;
+  DTYPE **m_aaLabel;
+
+  int m_numOfInput;             //input data의 개수!!!
+  int m_window;                 //window size -> 홀수가 기본이겠지!
+  int m_negative;
+
+  int m_dimOfInput;
+  int m_dimOfLabel;
 
 public:
   TextDataset(string path, Field field);
 
-  void                         Alloc(string path, Field field);
+  virtual void                 Alloc(string path, Field field);
 
   void                         ReadFile();
 
@@ -90,6 +92,10 @@ public:
 
   char*                        GetTextData();
 
+  int                          GetInputDim();
+  int                          GetLabelDim();
+  void                         SetInputDim(int inputDim);
+  void                         SetLabelDim(int labelDim);
   //virtual std::vector<Tensor<DTYPE> *>* GetData(int idx);
 
 };
@@ -122,13 +128,13 @@ template<typename DTYPE> int TextDataset<DTYPE>::GetNumberofVocabs(){
 }
 
 template<typename DTYPE> char* TextDataset<DTYPE>::GetTextData(){
-  return TextData;
+  return m_pTextData;
 }
 
-template<typename DTYPE> TextDataset<DTYPE>::TextDataset(string _path, Field field) {
+template<typename DTYPE> TextDataset<DTYPE>::TextDataset(string path, Field field) {
 
   cout<<"<<<<<<<<<<<<< TextDataset Constructor >>>>>>>>>>>>>>>"<<endl;
-  path="";
+  this->path="";
   text_length = 0;
   line_length = 0;
 
@@ -138,25 +144,29 @@ template<typename DTYPE> TextDataset<DTYPE>::TextDataset(string _path, Field fie
   m_pVocab2Index = NULL;
   n_vocabs = 0;
 
-  // m_aaInput = NULL;
-  // m_aaLabel = NULL;
-  // m_numOfInput = 0;
-  // m_window     = 0;
-  // m_negative   = 0;
-  // m_dimOfInput = 0;
-  // m_dimOfLabel = 0;
+  m_aaInput = NULL;
+  m_aaLabel = NULL;
+  m_numOfInput = 0;
+  m_window     = 0;
+  m_negative   = 0;
+  m_dimOfInput = 0;
+  m_dimOfLabel = 0;
 
-  Alloc(_path, field);
+  Alloc(path, field);
 }
 
 
-template<typename DTYPE> void TextDataset<DTYPE>::Alloc(string _path, Field field) {
+template<typename DTYPE> void TextDataset<DTYPE>::Alloc(string path, Field field) {
 
-  path = _path;
+  this->path = path;
   this->field = new Field(field);
   m_pIndex2Vocab = new map<int, string>();
   m_pVocab2Frequency = new map<string, int>();
   m_pVocab2Index = new map<string, int>();
+
+  AddWord("<s>");
+  AddWord("<e>");
+
 
   ReadFile();
 }
@@ -167,9 +177,9 @@ template<typename DTYPE> TextDataset<DTYPE>::~TextDataset() {
 }
 
 template<typename DTYPE> void TextDataset<DTYPE>::Delete() {
-  if(TextData) {
-    delete[] TextData;
-    TextData = NULL;
+  if(m_pTextData) {
+    delete[] m_pTextData;
+    m_pTextData = NULL;
   }
 
   if(m_pIndex2Vocab) {
@@ -209,11 +219,11 @@ template<typename DTYPE> void TextDataset<DTYPE>::ReadFile() {
       fin.tellg();
       fin.seekg(0, ios::beg);
 
-      TextData = new char[text_length];
+      m_pTextData = new char[text_length];
       //파일 읽기
-      fin.read(TextData, text_length);
+      fin.read(m_pTextData, text_length);
 
-      text_length = strlen(TextData);
+      text_length = strlen(m_pTextData);
       fin.close();
     }
 
@@ -301,195 +311,17 @@ template<typename DTYPE> int TextDataset<DTYPE>:: GetLineLength(){
 template<typename DTYPE> void TextDataset<DTYPE>:: SetLineLength(int n){
   line_length = n;
 }
+template<typename DTYPE> int TextDataset<DTYPE>::GetInputDim(){
+    return m_dimOfInput;
+}
+template<typename DTYPE> int TextDataset<DTYPE>::GetLabelDim(){
+    return m_dimOfLabel;
+}
+template<typename DTYPE> void TextDataset<DTYPE>::SetInputDim(int inputDim){
+    m_dimOfInput = inputDim;
+}
+template<typename DTYPE> void TextDataset<DTYPE>::SetLabelDim(int labelDim){
+    m_dimOfLabel = labelDim;
+}
 
-// template<typename DTYPE> std::vector<Tensor<DTYPE> *>* TextDataset<DTYPE>:: GetData(int idx){
-//   std::vector<Tensor<DTYPE> *> *result = new std::vector<Tensor<DTYPE> *>(0, NULL);
-
-//   Tensor<DTYPE> *input = Tensor<DTYPE>::Zeros(1, 1, 1, 1, m_dimOfInput);
-//   Tensor<DTYPE> *label = Tensor<DTYPE>::Zeros(1, 1, 1, 1, m_dimOfLabel);
-
-//   for (int i = 0; i < m_dimOfInput; i++) {
-//       //이거는 전체 단어의 개수 안 맞춰주면 이렇게 됨!!!
-//       if(m_aaInput[idx][i]==-1)
-//           std::cout<<'\n'<<"****************************************************************************************음수존재..."<<'\n';
-//       (*input)[i] = m_aaInput[idx][i];
-//   }
-
-//   //(*label)[ (int)m_aaLabel[idx][0] ] = 1.f;
-//   (*label)[0] = 1.f;
-
-//   result->push_back(input);
-//   result->push_back(label);
-
-//   return result;
-// }
-
-
-//--------------------------------------------------병렬 코퍼스 데이터--------------------------------------------------//
-// template<typename DTYPE>
-// class ParalleledCorpusDataset : public TextDataset<DTYPE>{ //파일 경로 받아서 실제 보캡, Paired문장 등 보관
-// private:
-//   pair<string, string> m_languageName;
-//   vector< pair<string, string> >* m_pairedSentences;          // paired data
-//   vector< pair< int*, int* > >* m_pairedIndexedSentences;
-// public:
-//   ParalleledCorpusDataset(string path, string srcName, string dstName, Field field);
-//
-//   void                                   Alloc();
-//
-//   void                                   MakeLineData();
-//
-//   virtual void                           BuildVocab();
-//
-//   virtual                                ~ParalleledCorpusDataset();
-//
-//   void                                   Delete();
-//
-//
-//   vector< pair<string, string> >*        GetPairedSentences();
-//
-//   vector< pair< int*, int* > >*          GetmPairedIndexedSentences();
-//   //virtual std::vector<Tensor<DTYPE>*>*   GetData(int idx);
-// };
-//
-//
-// template<typename DTYPE> ParalleledCorpusDataset<DTYPE>::ParalleledCorpusDataset(string path, string srcName, string dstName, Field field) : TextDataset<DTYPE>::TextDataset(path, field) {
-//
-//   m_languageName = make_pair(srcName, dstName);
-//
-//   m_pairedSentences = NULL;
-//   m_pairedIndexedSentences = NULL;
-//
-//   Alloc();
-// }
-// template<typename DTYPE> ParalleledCorpusDataset<DTYPE>::~ParalleledCorpusDataset() {
-//     cout << "ParalleledCorpusDataset 소멸자 호출" << endl;
-//     Delete();
-// }
-//
-// template<typename DTYPE> void ParalleledCorpusDataset<DTYPE>::Delete() {
-//   if(m_pairedSentences) {
-//     delete m_pairedSentences;
-//     m_pairedSentences = NULL;
-//   }
-//
-//   if(m_pairedIndexedSentences) {
-//     delete m_pairedIndexedSentences;
-//     m_pairedIndexedSentences = NULL;
-//   }
-// }
-//
-//
-// template<typename DTYPE> void ParalleledCorpusDataset<DTYPE>::Alloc() {
-//
-//   m_pairedSentences = new vector< pair<string, string> >();
-//   m_pairedIndexedSentences = new vector< pair< int*, int* > >();
-// }
-//
-// template<typename DTYPE> void ParalleledCorpusDataset<DTYPE>::BuildVocab() {
-//   MakeLineData();
-//   cout<<"<<<<<<<<<<<<<<<<  BuildVocab 호출 >>>>>>>>>>>>>>>>>>>>"<<endl;
-//   //cout << m_pairedSentences->size() << endl;
-//   for(int i=0; i<m_pairedSentences->size(); i++){
-//     vector<string> temp_words = this->SplitBy(m_pairedSentences->at(i).first, ' ');
-//     vector<int> temp_first_indexed_words;
-//     for(string word: temp_words){
-//       //cout << word << endl;
-//       temp_first_indexed_words.push_back(this->GetpVocab2Index()->at(word));
-//     }
-//     temp_words = this->SplitBy(m_pairedSentences->at(i).second, ' ');
-//     vector<int> temp_second_indexed_words;
-//     for(string word: temp_words){
-//       temp_second_indexed_words.push_back(this->GetpVocab2Index()->at(word));
-//     }
-//     pair<int*, int*> temp_pair = make_pair(&temp_first_indexed_words[0], &temp_second_indexed_words[0]);
-//     m_pairedIndexedSentences->push_back(temp_pair);
-//   }
-//   m_pairedIndexedSentences->shrink_to_fit();
-// }
-//
-// template<typename DTYPE> void ParalleledCorpusDataset<DTYPE>::MakeLineData() { // 확인완료
-//
-//     cout<<"<<<<<<<<<<<<<<<<  MakeLineData  >>>>>>>>>>>>>>>>>>>>"<<endl;
-//     //cout<<strlen(TextData)<<endl;
-//     char* token = strtok(this->GetTextData(), "\t\n");
-//     char* last_sentence = NULL;
-//
-//     while(token != NULL) {
-//       //cout<<token<<endl;              //DEBUG
-//       if(this->GetLineLength()%2==0){
-//         last_sentence = token;                                              // paired data를 만들기위해 앞에 오는 line 임시 저장
-//       }
-//       else {
-//         string str_last_sentence = this->Preprocess(last_sentence);
-//         string str_token = this->Preprocess(token);
-//         m_pairedSentences->push_back(make_pair(str_last_sentence, str_token));           // paired data 저장
-//         this->AddSentence(this->Preprocess(m_pairedSentences->back().first));
-//         this->AddSentence(this->Preprocess(m_pairedSentences->back().second));
-//       }
-//       //temp->line->push_back(token);                                         // 각 언어에 line 저장
-//       //MakeVocab(token);
-//       token = strtok(NULL, "\t\n");
-//       int temp_lineLength = this->GetLineLength();
-//       if(temp_lineLength%10000==0)
-//         cout<<"line_length = "<<temp_lineLength<<endl;
-//
-//       this->SetLineLength(++temp_lineLength);
-//     }
-//     m_pairedSentences->shrink_to_fit();
-//     //text_lines /=2;
-//   }
-//
-//
-// template<typename DTYPE>  vector< pair<string, string> >* ParalleledCorpusDataset<DTYPE>::GetPairedSentences() {
-//   return m_pairedSentences;
-// }
-//
-// template<typename DTYPE>  vector< pair< int*, int* > >* ParalleledCorpusDataset<DTYPE>::GetmPairedIndexedSentences() {
-//   return m_pairedIndexedSentences;
-// }
-
-
-
-// template<typename DTYPE> std::vector<Tensor<DTYPE> *>* ParalleledCorpusDataset<DTYPE>:: GetData(int idx){
-//   std::vector<Tensor<DTYPE> *> *result = new std::vector<Tensor<DTYPE> *>(0, NULL);
-
-//   Tensor<DTYPE> *input = Tensor<DTYPE>::Zeros(1, 1, 1, 1, m_dimOfInput);
-//   Tensor<DTYPE> *label = Tensor<DTYPE>::Zeros(1, 1, 1, 1, m_dimOfLabel);
-
-//   for (int i = 0; i < m_dimOfInput; i++) {
-//       //이거는 전체 단어의 개수 안 맞춰주면 이렇게 됨!!!
-//       if(m_aaInput[idx][i]==-1)
-//           std::cout<<'\n'<<"****************************************************************************************음수존재..."<<'\n';
-//       (*input)[i] = m_aaInput[idx][i];
-//   }
-
-//   //(*label)[ (int)m_aaLabel[idx][0] ] = 1.f;
-//   (*label)[0] = 1.f;
-
-//   result->push_back(input);
-//   result->push_back(label);
-
-//   return result;
-// }
-
-// int main(){
-//   ParalleledCorpusDataset<float>* translation_data = new ParalleledCorpusDataset<float>("eng-fra.txt", "eng", "fra");
-
-//   translation_data->BuildVocab();
-//   cout << "LineLength:  " << translation_data->GetLineLength() << endl;
-//   cout << "TextLength:  " << translation_data->GetTextLength() << endl;
-//   cout << "NumofWords:  " << translation_data->GetNumberofWords() << endl;
-//   cout << "NumofVocabs: " << translation_data->GetNumberofVocabs() << endl;
-
-//   map<int, string> *index2vocab = translation_data->GetpIndex2Vocab();
-//   map<int, string> :: iterator iter;
-//   int count = 0;
-//   for ( iter = index2vocab->begin(); iter != index2vocab->end(); iter++ ){
-//     cout << iter->first << " : " << iter->second << "\t";
-//     if(count%5==0){
-//       cout << endl;
-//     }
-//     count ++;
-//   }
-// }
+#endif
