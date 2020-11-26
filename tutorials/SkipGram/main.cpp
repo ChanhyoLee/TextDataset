@@ -9,16 +9,16 @@
 #include <algorithm> //sort 때문에 추가한 헤더
 
 //#include "text8.hpp"
-//#include "accuracy.hpp"
+//#include "new_accuracy.hpp"
 //#include "TextDataSet.hpp"
 #include "TextDataSet_utils.hpp"
 
 using namespace std;
 
-//#define BATCH                 100
-#define EPOCH                 3
-#define LOOP_FOR_TRAIN        500000   // (60000 / BATCH)
-#define MAX_TEST_ITERATION    20   // (10000 / BATCH)
+#define BATCH_1               22
+#define EPOCH                 10
+#define LOOP_FOR_TRAIN        100  // (60000 / BATCH)
+#define MAX_TEST_ITERATION    10   // (10000 / BATCH)
 #define GPUID                 2
 
 #define WINDOW                5
@@ -28,195 +28,176 @@ using namespace std;
 
 int main(int argc, char const *argv[]) {
 
+    clock_t startTime = 0, endTime = 0;
+    double  nProcessExcuteTime = 0;
+
     Field field(true);
+    TextDataset<float>* train_dataset = new SkipGramDataset<float>("Data/text8.txt", WINDOW, NEGATIVE, field);
+    DataLoader<float> * train_dataloader = new DataLoader<float>(train_dataset, BATCH_1, TRUE, 20, FALSE);
 
-    TextDataset<float>* translation_data = new ParalleledCorpusDataset<float>("Data/eng-fra.txt", "eng", "fra", field);
+    FourTermAnalogyDataset<float> *test_dataset = new FourTermAnalogyDataset<float>("Data/questions-words.txt", field);
+    DataLoader<float> * test_dataloader = new DataLoader<float>(test_dataset, BATCH_1, TRUE, 20, FALSE);
 
-    cout << "LineLength:  " << translation_data->GetLineLength() << endl;
-    cout << "TextLength:  " << translation_data->GetTextLength() << endl;
-    cout << "NumofWords:  " << translation_data->GetNumberofWords() << endl;
-    cout << "NumofVocabs: " << translation_data->GetNumberofVocabs() << endl;
+    int word_num      = train_dataset->GetNumberofWords();
+    int vocab_size    = train_dataset->GetNumberofVocabs();
 
-    // map<int, string> *index2vocab = translation_data->GetpIndex2Vocab();
-    // map<int, string> :: iterator iter;
-    // int count = 0;
-    // for ( iter = index2vocab->begin(); iter != index2vocab->end(); iter++ ){
-    //     if(count%100==0)
-    //         cout << iter->first << " : " << iter->second << endl;
-    //     count ++;
-    // }
+    std::cout<<"Train 파일에 있는 단어 개수 : "<<word_num<<" / vocab 개수 : "<<vocab_size<<'\n';
 
+    int inputDim      = train_dataset->GetInputDim();
+    int LabelDim      = train_dataset->GetLabelDim();
+    
+    cout << "Input Dimension: " << inputDim << "\t" << "Label Dimension: " << LabelDim << endl;
 
-    delete translation_data;
-    // clock_t startTime = 0, endTime = 0;
-    // double  nProcessExcuteTime = 0;
+    Tensorholder<float> *x_holder = new Tensorholder<float>(1, BATCH_1, 1, 1, inputDim, "x");
+    Tensorholder<float> *label_holder = new Tensorholder<float>(1, BATCH_1, 1, 1, LabelDim, "label");
 
-    //text8<float> *train_dataset = new text8<float>("Data/debug.txt", WINDOW, NEGATIVE, SKIPGRAM);
-   // text8<float> *train_dataset = new text8<float>("Data/subtext8-2.txt", WINDOW, NEGATIVE, SKIPGRAM);
-//     DataLoader<float> * train_dataloader = new DataLoader<float>(train_dataset, BATCH, TRUE, 20, FALSE);
-
-//     accuracy<float> *test_dataset = new accuracy<float>("Data/questions-words.txt", train_dataset->GetVocab(), train_dataset->GetVocabSize());
-//     DataLoader<float> * test_dataloader = new DataLoader<float>(test_dataset, BATCH, TRUE, 20, FALSE);
-
-//     int word_num      = train_dataset->GetWordNum();
-//     int vocab_size  = train_dataset->GetVocabSize();
-
-//     std::cout<<"Train 파일에 있는 단어 개수 : "<<word_num<<" / vocab 개수 : "<<vocab_size<<'\n';
-
-//     int inputDim      = train_dataset->GetInputDim();
-//     int LabelDim      = train_dataset->GetLabelDim();
-
-//     Tensorholder<float> *x_holder = new Tensorholder<float>(1, BATCH, 1, 1, inputDim, "x");
-//     Tensorholder<float> *label_holder = new Tensorholder<float>(1, BATCH, 1, 1, LabelDim, "label");
-
-//     NeuralNetwork<float> *net = new my_Embedding(x_holder, label_holder, vocab_size);
-
-//     //weight값을 가져올 수 있는지 확인하기
-//     // std::cout<<"Parameter 이름"<<'\n';
-//     // std::cout<<(*net->GetParameter())[0]->GetName()<<'\n';
-//     // std::cout<<(*net->GetParameter())[0]->GetResult()<<'\n';
+    NeuralNetwork<float> *net = new my_Embedding(x_holder, label_holder, vocab_size);
+    //weight값을 가져올 수 있는지 확인하기
+    // std::cout<<"Parameter 이름"<<'\n';
+    // std::cout<<(*net->GetParameter())[0]->GetName()<<'\n';
+    // std::cout<<(*net->GetParameter())[0]->GetResult()<<'\n';
 
 
-// #ifdef __CUDNN__
-//     std::cout<<"GPU환경에서 실행중 입니다."<<'\n';
-//     net->SetDeviceGPU(GPUID);
-// #endif  // __CUDNN__
+#ifdef __CUDNN__
+    std::cout<<"GPU환경에서 실행중 입니다."<<'\n';
+    net->SetDeviceGPU(GPUID);
+#endif  // __CUDNN__
 
 
-// #ifdef __CUDNN__
-//             x->SetDeviceGPU(GPUID);
-//             label->SetDeviceGPU(GPUID);
-// #endif  // __CUDNN__
+#ifdef __CUDNN__
+            x->SetDeviceGPU(GPUID);
+            label->SetDeviceGPU(GPUID);
+#endif  // __CUDNN__
 
 
-// net->PrintGraphInformation();
+net->PrintGraphInformation();
+cout << "그래프 완성" << endl;
+float best_acc = 0;
+int   epoch    = 0;
 
-// float best_acc = 0;
-// int   epoch    = 0;
+std::cout << "best_acc : " << best_acc << '\n';
+std::cout << "epoch : " << epoch << '\n';
 
-// std::cout << "best_acc : " << best_acc << '\n';
-// std::cout << "epoch : " << epoch << '\n';
+for (int i = epoch + 1; i < EPOCH; i++) {
+    std::cout << "EPOCH : " << i << '\n';
 
-// for (int i = epoch + 1; i < EPOCH; i++) {
-//     std::cout << "EPOCH : " << i << '\n';
+    if ((i + 1) % 50 == 0) {
+        std::cout << "Change learning rate!" << '\n';
+        float lr = net->GetOptimizer()->GetLearningRate();
+        net->GetOptimizer()->SetLearningRate(lr * 0.1);
+    }
 
-//     if ((i + 1) % 50 == 0) {
-//         std::cout << "Change learning rate!" << '\n';
-//         float lr = net->GetOptimizer()->GetLearningRate();
-//         net->GetOptimizer()->SetLearningRate(lr * 0.1);
-//     }
+    // ======================= Train =======================
+    float train_accuracy = 0.f;
+    float train_avg_loss = 0.f;
 
-//     // ======================= Train =======================
-//     float train_accuracy = 0.f;
-//     float train_avg_loss = 0.f;
+    net->SetModeTrain();
 
-//     net->SetModeTrain();
+    startTime = clock();
 
-//     startTime = clock();
+    for (int j = 0; j < LOOP_FOR_TRAIN; j++) {
+        //dataset->CreateTrainDataPair(BATCH);
+        std::vector<Tensor<float> *> * temp =  train_dataloader->GetDataFromGlobalBuffer();
+        // printf("%d\r\n", temp->size());
 
-//     for (int j = 0; j < LOOP_FOR_TRAIN; j++) {
-//         //dataset->CreateTrainDataPair(BATCH);
-//         std::vector<Tensor<float> *> * temp =  train_dataloader->GetDataFromGlobalBuffer();
-//         // printf("%d\r\n", temp->size());
+        Tensor<float> *x_t = (*temp)[0];
+        Tensor<float> *l_t = (*temp)[1];
+        delete temp;
 
-//         Tensor<float> *x_t = (*temp)[0];
-//         Tensor<float> *l_t = (*temp)[1];
-//         delete temp;
-
-//         //입력 값을 잘 만들어 주는지 확인!!
-//         // std::cout<<i<<"번째 입력의 값"<<'\n';
-//         // std::cout<<x_t->GetShape()<<'\n';
-//         // std::cout<<x_t<<'\n';
-//         //
-//         // std::cout<<i<<"번째 Label의 값"<<'\n';
-//         // std::cout<<l_t->GetShape()<<'\n';
-//         // std::cout<<l_t<<'\n';
-
-
-// #ifdef __CUDNN__
-//         x_t->SetDeviceGPU(GPUID);
-//         l_t->SetDeviceGPU(GPUID);
-// #endif  // __CUDNN__
-//         // std::cin >> temp;
-//         net->FeedInputTensor(2, x_t, l_t);
-//         net->ResetParameterGradient();
-//         net->Train();
-
-//         // std::cin >> temp;
-
-//         train_accuracy += net->GetAccuracy(NEGATIVE+1);
-//         train_avg_loss = net->GetLoss();
-//         //std::cout<<"갖고오는 loss 값 : "<<net->GetLoss()<<'\n';
-
-//         printf("\rTrain complete percentage is %d / %d -> loss : %f, acc : %f"  /*(ExcuteTime : %f)*/,
-//                j + 1, LOOP_FOR_TRAIN,
-//                train_avg_loss ,/// (j + 1),
-//                train_accuracy / (j + 1)
-//                /*nProcessExcuteTime*/);
-//         fflush(stdout);
-
-//         if(j%20000 == 0)
-//             std::cout<<'\n';
-//     }
-
-//     endTime            = clock();
-//     nProcessExcuteTime = ((double)(endTime - startTime)) / CLOCKS_PER_SEC;
-//     printf("\n(excution time per epoch : %f)\n\n", nProcessExcuteTime);
+        //입력 값을 잘 만들어 주는지 확인!!
+        // std::cout<<i<<"번째 입력의 값"<<'\n';
+        // std::cout<<x_t->GetShape()<<'\n';
+        // std::cout<<x_t<<'\n';
+        //
+        // std::cout<<i<<"번째 Label의 값"<<'\n';
+        // std::cout<<l_t->GetShape()<<'\n';
+        // std::cout<<l_t<<'\n';
 
 
-// // ============================================================================================ Test ===============================================================================================
-//         float test_accuracy = 0.f;
-//         float test_avg_loss = 0.f;
+#ifdef __CUDNN__
+        x_t->SetDeviceGPU(GPUID);
+        l_t->SetDeviceGPU(GPUID);
+#endif  // __CUDNN__
+        // std::cin >> temp;
+        net->FeedInputTensor(2, x_t, l_t);
+        net->ResetParameterGradient();
+        net->Train();
 
-//         //test task는 입력의 shape = 3, label = 1 로 정해져있지!!!
-//         x_holder = new Tensorholder<float>(1, BATCH, 1, 1, 3, "x");
-//         label_holder = new Tensorholder<float>(1, BATCH, 1, 1, 1, "label");
+        // std::cin >> temp;
 
-//         NeuralNetwork<float> *testNet = new my_EmbeddingTest( x_holder, label_holder, (*net->GetParameter())[0] );
+        train_accuracy += net->GetAccuracy(NEGATIVE+1);
+        train_avg_loss = net->GetLoss();
+        //std::cout<<"갖고오는 loss 값 : "<<net->GetLoss()<<'\n';
 
-//         std::cout << "Start Test" <<'\n';
+        printf("\rTrain complete percentage is %d / %d -> loss : %f, acc : %f"  /*(ExcuteTime : %f)*/,
+               j + 1, LOOP_FOR_TRAIN,
+               train_avg_loss ,/// (j + 1),
+               train_accuracy / (j + 1)
+               /*nProcessExcuteTime*/);
+        fflush(stdout);
 
-//         for (int j = 0; j < (int)MAX_TEST_ITERATION; j++) {
+        if(j%20000 == 0)
+            std::cout<<'\n';
+    }
 
-//           std::vector<Tensor<float> *> * temp =  test_dataloader->GetDataFromGlobalBuffer();
-//           Tensor<float> *x_t = (*temp)[0];
-//           Tensor<float> *l_t = (*temp)[1];
-//           delete temp;
+    endTime            = clock();
+    nProcessExcuteTime = ((double)(endTime - startTime)) / CLOCKS_PER_SEC;
+    printf("\n(excution time per epoch : %f)\n\n", nProcessExcuteTime);
 
-//           //입력 값을 잘 만들어 주는지 확인!!
-//           // std::cout<<i<<"번째 입력의 값"<<'\n';
-//           // std::cout<<x_t->GetShape()<<'\n';
-//           // std::cout<<x_t<<'\n';
-//           //
-//           // std::cout<<i<<"번째 Label의 값"<<'\n';
-//           // std::cout<<l_t->GetShape()<<'\n';
-//           // std::cout<<l_t<<'\n';
 
-// #ifdef __CUDNN__
-//           x_t->SetDeviceGPU(GPUID);
-//           l_t->SetDeviceGPU(GPUID);
-// #endif  // __CUDNN__
+// ============================================================================================ Test ===============================================================================================
+        float test_accuracy = 0.f;
+        float test_avg_loss = 0.f;
 
-//             testNet->FeedInputTensor(2, x_t, l_t);
+        //test task는 입력의 shape = 3, label = 1 로 정해져있지!!!
+        x_holder = new Tensorholder<float>(1, BATCH_1, 1, 1, 3, "x");
+        label_holder = new Tensorholder<float>(1, BATCH_1, 1, 1, 1, "label");
 
-//             testNet->Test();                                            //이거.... 음... lossfunction forward하는 부분이 필요없는데.... 허허허
+        NeuralNetwork<float> *testNet = new my_EmbeddingTest( x_holder, label_holder, (*net->GetParameter())[0] );
 
-//             test_accuracy += testNet->GetIndexAccuracy();
+        std::cout << "Start Test" <<'\n';
 
-//             //뭘 결과로 갖고왔는지 확인해보자....!!!
-//             //testNet->GetEmbeddingResult(train_dataset->GetVocab());
+        for (int j = 0; j < (int)MAX_TEST_ITERATION; j++) {
 
-//             printf("\rTest complete percentage is %d / %d -> acc : %f",
-//                    j + 1, MAX_TEST_ITERATION,
-//                    test_accuracy / (j + 1) );
-//             fflush(stdout);
-//         }
+          std::vector<Tensor<float> *> * temp =  test_dataloader->GetDataFromGlobalBuffer();
+          Tensor<float> *x_t = (*temp)[0];
+          Tensor<float> *l_t = (*temp)[1];
+          delete temp;
 
-//         std::cout << "\n\n";
+          //입력 값을 잘 만들어 주는지 확인!!
+          // std::cout<<i<<"번째 입력의 값"<<'\n';
+          // std::cout<<x_t->GetShape()<<'\n';
+          // std::cout<<x_t<<'\n';
+          //
+          // std::cout<<i<<"번째 Label의 값"<<'\n';
+          // std::cout<<l_t->GetShape()<<'\n';
+          // std::cout<<l_t<<'\n';
 
-//     }
+#ifdef __CUDNN__
+          x_t->SetDeviceGPU(GPUID);
+          l_t->SetDeviceGPU(GPUID);
+#endif  // __CUDNN__
 
-//     delete net;
+            testNet->FeedInputTensor(2, x_t, l_t);
+
+            testNet->Test();                                            //이거.... 음... lossfunction forward하는 부분이 필요없는데.... 허허허
+
+            test_accuracy += testNet->GetIndexAccuracy();
+
+            //뭘 결과로 갖고왔는지 확인해보자....!!!
+            //testNet->GetEmbeddingResult(train_dataset->GetVocab());
+
+            printf("\rTest complete percentage is %d / %d -> acc : %f",
+                   j + 1, MAX_TEST_ITERATION,
+                   test_accuracy / (j + 1) );
+            fflush(stdout);
+        }
+
+        std::cout << "\n\n";
+
+    }
+
+    delete net;
 
     return 0;
 }
